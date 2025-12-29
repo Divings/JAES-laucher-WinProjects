@@ -11,10 +11,12 @@ class Program
         string appData = Environment.GetFolderPath(
             Environment.SpecialFolder.ApplicationData
         );
+
+        // 実行ファイルディレクトリ取得
         string exeDir = AppContext.BaseDirectory;
         string jaesJar = Path.Combine(exeDir, "JAES.jar");
 
-        // --cwd 処理
+        // --cwd オプションがある場合、カレントディレクトリを変更 (その後の処理に影響)
         for (int i = 0; i < args.Length - 1; i++)
         {
             if (args[i] == "--cwd")
@@ -29,6 +31,7 @@ class Program
             appData, "JAES", "key", "private.pem"
         );
 
+        // 秘密鍵の存在確認
         if (!File.Exists(keyPath))
         {
             Console.Error.WriteLine(
@@ -42,15 +45,17 @@ class Program
         //　存在しない場合設定ファイルからファイルpathを取得
         if (!File.Exists(jaesJar))
         {
-
+           
             IniFile.IniFile ini;
 
+            // 設定ファイル読み込み
             try
             {
                 ini = new IniFile.IniFile("config.ini");
             }
             catch (FileNotFoundException)
             {
+                // config.iniが存在しない場合
                 Console.Error.WriteLine(
                     "config.ini not found.\n" +
                     "Please create config.ini or place JAES.jar in the same directory."
@@ -58,6 +63,7 @@ class Program
                 ErrorInput();
                 return 1;
             }
+            // 設定ファイルからJAES.jarのパスを取得
             var configuredJar = ini.GetString("JAES", "JarPath", "");
 
             if (!string.IsNullOrEmpty(configuredJar))
@@ -106,6 +112,8 @@ class Program
             return 1;
         }
     }
+
+    // エラー時の入力待ち
     static void ErrorInput()
     {
         if (!Environment.UserInteractive)
