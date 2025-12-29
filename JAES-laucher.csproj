@@ -8,4 +8,10 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Reference Include="IniFile">
+      <HintPath>..\IniFile\bin\Debug\net8.0\IniFile.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
 </Project>

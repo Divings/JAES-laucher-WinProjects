@@ -42,7 +42,40 @@ class Program
         //　存在しない場合設定ファイルからファイルpathを取得
         if (!File.Exists(jaesJar))
         {
-            Console.WriteLine("ファイルは存在しません。");
+
+            IniFile.IniFile ini;
+
+            try
+            {
+                ini = new IniFile.IniFile("config.ini");
+            }
+            catch (FileNotFoundException)
+            {
+                Console.Error.WriteLine(
+                    "config.ini not found.\n" +
+                    "Please create config.ini or place JAES.jar in the same directory."
+                );
+                ErrorInput();
+                return 1;
+            }
+            var configuredJar = ini.GetString("JAES", "JarPath", "");
+
+            if (!string.IsNullOrEmpty(configuredJar))
+            {
+                jaesJar = configuredJar;
+            }
+        }
+
+        // 再度JAES.jarの存在確認(最終チェック)
+        if (!File.Exists(jaesJar))
+        {
+            Console.Error.WriteLine(
+                "JAES.jar not found.\n" +
+                "Please place JAES.jar in the same directory as this executable,\n" +
+                "or specify the path in config.ini under [JAES] JarPath."
+            );
+            ErrorInput();
+            return 1;
         }
 
         var psi = new ProcessStartInfo
@@ -59,6 +92,7 @@ class Program
             if (proc == null)
             {
                 Console.Error.WriteLine("Failed to start Java process.");
+                ErrorInput();
                 return 1;
             }
             return proc.ExitCode;
@@ -68,10 +102,17 @@ class Program
                 "Java Runtime Environment (JRE) is not installed or not found in PATH.\n" +
                 "Please install Java (JDK 25 or compatible) and ensure the 'java' command is available in PATH.\n\"https://jdk.java.net/25/\""
             );
-            Console.Error.WriteLine();
-            Console.Error.WriteLine("Press Enter to exit...");
-            Console.ReadLine();
+            ErrorInput();
             return 1;
         }
+    }
+    static void ErrorInput()
+    {
+        if (!Environment.UserInteractive)
+            return;
+
+        Console.Error.WriteLine();
+        Console.Error.WriteLine("Press Enter to exit...");
+        Console.ReadLine();
     }
 }
