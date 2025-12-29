@@ -68,6 +68,9 @@ class Program
                 "Java Runtime Environment (JRE) is not installed or not found in PATH.\n" +
                 "Please install Java (JDK 25 or compatible) and ensure the 'java' command is available in PATH.\n\"https://jdk.java.net/25/\""
             );
+            Console.Error.WriteLine();
+            Console.Error.WriteLine("Press Enter to exit...");
+            Console.ReadLine();
             return 1;
         }
     }
