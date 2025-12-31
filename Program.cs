@@ -11,7 +11,7 @@ class Program
         string appData = Environment.GetFolderPath(
             Environment.SpecialFolder.ApplicationData
         );
-
+        string extraJavaArgs = "";
         // 実行ファイルディレクトリ取得
         string exeDir = AppContext.BaseDirectory;
         string jaesJar = Path.Combine(exeDir, "JAES.jar");
@@ -25,6 +25,7 @@ class Program
                 i++; // skip dir
             }
         }
+        
 
         // 秘密鍵パス: %APPDATA%\JAES\key\private.pem
         string keyPath = Path.Combine(
@@ -49,26 +50,60 @@ class Program
             IniFile.IniFile ini;
 
             // 設定ファイル読み込み
-            try
+           if (!File.Exists("config.ini"))
             {
-                ini = new IniFile.IniFile("config.ini");
-            }
-            catch (FileNotFoundException)
-            {
-                // config.iniが存在しない場合
                 Console.Error.WriteLine(
-                    "config.ini not found.\n" +
-                    "Please create config.ini or place JAES.jar in the same directory."
+                    "JAES.jar not found and config.ini does not exist.\n" +
+                    "Please place JAES.jar in the same directory as this executable,\n" +
+                    "or create config.ini to specify the path."
                 );
                 ErrorInput();
                 return 1;
             }
+            ini = new IniFile.IniFile("config.ini");
+          
             // 設定ファイルからJAES.jarのパスを取得
             var configuredJar = ini.GetString("JAES", "JarPath", "");
-
+            
             if (!string.IsNullOrEmpty(configuredJar))
             {
                 jaesJar = configuredJar;
+            }
+        }
+
+        // ポータブルモード確認
+            IniFile.IniFile inis;
+        // 設定ファイル読み込み
+
+            if (File.Exists("config.ini"))
+            {
+                inis = new IniFile.IniFile("config.ini");
+            // ポータブルモード設定確認
+            var portablemode = inis.GetBool("General", "PortableMode");
+            // ポータブルモードの場合
+            if (portablemode)
+            {
+                // ポータブルモード用鍵ディレクトリ作成
+                string portableKeyDir = Path.Combine(exeDir, "JAES-conf", "key");
+
+                // ディレクトリ作成
+                try
+                {
+                    Directory.CreateDirectory(portableKeyDir);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine(
+                        "Failed to create key directory for portable mode.\n" +
+                        portableKeyDir + "\n" +
+                        ex.Message
+                    );
+                    ErrorInput();
+                    return 1;
+                }
+                // Java引数にポータブルモード用鍵ディレクトリを追加
+                extraJavaArgs = "--portable " + portableKeyDir;
+                // Console.WriteLine("Portable Key Directory: " + portableKeyDir); 
             }
         }
 
@@ -84,10 +119,11 @@ class Program
             return 1;
         }
 
+        // Javaプロセス起動
         var psi = new ProcessStartInfo
         {
             FileName = "java",
-            Arguments = "-Xmx1g -jar \"" + jaesJar + "\" " + string.Join(" ", args),
+            Arguments ="-Xmx1g -jar \"" + jaesJar + "\" " +extraJavaArgs + " " +string.Join(" ", args),
             UseShellExecute = false
         };
 
