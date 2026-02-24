@@ -32,16 +32,6 @@ class Program
             appData, "JAES", "key", "private.pem"
         );
 
-        // 秘密鍵の存在確認
-        if (!File.Exists(keyPath))
-        {
-            Console.Error.WriteLine(
-                "The private key cannot be found.\n" +
-                "Generating a new key pair.\n" +
-                "※ Existing encrypted data will no longer be decryptable."
-            );
-        }
-
         // JAES.jar の存在確認
         //　存在しない場合設定ファイルからファイルpathを取得
         if (!File.Exists(jaesJar))
@@ -80,6 +70,24 @@ class Program
                 inis = new IniFile.IniFile("config.ini");
             // ポータブルモード設定確認
             var portablemode = inis.GetBool("General", "PortableMode");
+            var pubkey= inis.GetString("General", "PublicKey", "");
+            if (!string.IsNullOrEmpty(pubkey))
+            {
+                if (!File.Exists(pubkey))
+                {
+                    Console.Error.WriteLine(
+                        "The specified public key cannot be found.\n" +
+                        "Please check the path in config.ini under [General] PublicKey."
+                    );
+                    ErrorInput();
+                    return 1;
+                }
+                else
+                {
+                    extraJavaArgs = pubkey;
+                }
+            }
+            
             // ポータブルモードの場合
             if (portablemode)
             {
@@ -101,10 +109,32 @@ class Program
                     ErrorInput();
                     return 1;
                 }
+                // 秘密鍵パス: ポータブルモード用鍵ディレクトリ\private.pem
+                keyPath = Path.Combine(
+                    portableKeyDir, "private.pem"
+                );
+
                 // Java引数にポータブルモード用鍵ディレクトリを追加
                 extraJavaArgs = "--portable " + portableKeyDir;
                 // Console.WriteLine("Portable Key Directory: " + portableKeyDir); 
             }
+            else
+            { // 秘密鍵パス: %APPDATA%\JAES\key\private.pem
+                keyPath = Path.Combine(
+                    appData, "JAES", "key", "private.pem"
+                );
+            }
+            
+        }
+
+        // 秘密鍵の存在確認
+        if (!File.Exists(keyPath))
+        {
+            Console.Error.WriteLine(
+                "The private key cannot be found.\n" +
+                "Generating a new key pair.\n" +
+                "※ Existing encrypted data will no longer be decryptable."
+            );
         }
 
         // 再度JAES.jarの存在確認(最終チェック)
@@ -126,7 +156,7 @@ class Program
             Arguments ="-Xmx1g -jar \"" + jaesJar + "\" " +extraJavaArgs + " " +string.Join(" ", args),
             UseShellExecute = false
         };
-
+        
         try
         {
             var proc = Process.Start(psi);
