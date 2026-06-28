@@ -13,7 +13,7 @@ class Program
         string configPath = Path.Combine(exeDir, "config.ini");
         string jaesJar = Path.Combine(exeDir, "JAES.jar");
         string keyPath = Path.Combine(appData, "JAES", "key", "private.pem");
-
+        string app="java";
         var javaArgs = new List<string>();
 
         // config.ini 読み込み
@@ -40,7 +40,13 @@ class Program
                 i++;
             }
         }
-
+        bool guiMode = false;
+        try
+        {
+            guiMode = ini.GetBool("General", "GUI");
+        } catch (Exception) { 
+            guiMode = false;
+        }
         // JAES.jar がexe横にない場合、config.iniのJarPathを見る
         if (!File.Exists(jaesJar))
         {
@@ -83,7 +89,8 @@ class Program
             }
 
             var portableMode = ini.GetBool("General", "PortableMode");
-
+            
+            
             if (portableMode)
             {
                 string portableKeyDir = Path.Combine(exeDir, "JAES-conf", "key");
@@ -131,11 +138,15 @@ class Program
             WaitInput();
             return 1;
         }
+        if (guiMode)
+        {
+            app = "javaw";
+        }
 
         // Java起動
         var psi = new ProcessStartInfo
         {
-            FileName = "java",
+            FileName = app,
             UseShellExecute = false
         };
 
@@ -164,11 +175,17 @@ class Program
                 return 1;
             }
 
-            proc.WaitForExit();
-
-            WaitInput();
-
-            return proc.ExitCode;
+            if (!guiMode)
+            {
+                proc.WaitForExit();
+                WaitInput();
+                return proc.ExitCode;
+            }
+            else
+            {
+                return 0;
+            }
+            
         }
         catch (Win32Exception)
         {
