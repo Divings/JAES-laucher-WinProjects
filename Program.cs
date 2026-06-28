@@ -7,94 +7,87 @@ class Program
 {
     static int Main(string[] args)
     {
-        // APPDATA 取得（例: C:\Users\user\AppData\Roaming）
-        string appData = Environment.GetFolderPath(
-            Environment.SpecialFolder.ApplicationData
-        );
-        string extraJavaArgs = "";
-        // 実行ファイルディレクトリ取得
-        string exeDir = AppContext.BaseDirectory;
-        string jaesJar = Path.Combine(exeDir, "JAES.jar");
+        string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
 
-        // --cwd オプションがある場合、カレントディレクトリを変更 (その後の処理に影響)
+        string exeDir = AppContext.BaseDirectory;
+        string configPath = Path.Combine(exeDir, "config.ini");
+        string jaesJar = Path.Combine(exeDir, "JAES.jar");
+        string keyPath = Path.Combine(appData, "JAES", "key", "private.pem");
+
+        var javaArgs = new List<string>();
+
+        // config.ini 読み込み
+        IniFile.IniFile? ini = null;
+
+        if (File.Exists(configPath))
+        {
+            ini = new IniFile.IniFile(configPath);
+
+            // 作業ディレクトリ変更
+            var dir = ini.GetString("General", "SetWorkDir", "");
+            if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
+            {
+                Directory.SetCurrentDirectory(dir);
+            }
+        }
+
+        // --cwd がある場合はさらに作業ディレクトリ変更
         for (int i = 0; i < args.Length - 1; i++)
         {
             if (args[i] == "--cwd")
             {
                 Directory.SetCurrentDirectory(args[i + 1]);
-                i++; // skip dir
+                i++;
             }
         }
-        
 
-        // 秘密鍵パス: %APPDATA%\JAES\key\private.pem
-        string keyPath = Path.Combine(
-            appData, "JAES", "key", "private.pem"
-        );
-
-        // JAES.jar の存在確認
-        //　存在しない場合設定ファイルからファイルpathを取得
+        // JAES.jar がexe横にない場合、config.iniのJarPathを見る
         if (!File.Exists(jaesJar))
         {
-           
-            IniFile.IniFile ini;
-
-            // 設定ファイル読み込み
-           if (!File.Exists("config.ini"))
+            if (ini == null)
             {
                 Console.Error.WriteLine(
                     "JAES.jar not found and config.ini does not exist.\n" +
                     "Please place JAES.jar in the same directory as this executable,\n" +
                     "or create config.ini to specify the path."
                 );
-                ErrorInput();
+                WaitInput();
                 return 1;
             }
-            ini = new IniFile.IniFile("config.ini");
-          
-            // 設定ファイルからJAES.jarのパスを取得
+
             var configuredJar = ini.GetString("JAES", "JarPath", "");
-            
             if (!string.IsNullOrEmpty(configuredJar))
             {
                 jaesJar = configuredJar;
             }
         }
 
-        // ポータブルモード確認
-            IniFile.IniFile inis;
-        // 設定ファイル読み込み
+        // config.ini がある場合、公開鍵・ポータブルモード確認
+        if (ini != null)
+        {
+            var publicKey = ini.GetString("General", "PublicKey", "");
 
-            if (File.Exists("config.ini"))
+            if (!string.IsNullOrEmpty(publicKey))
             {
-                inis = new IniFile.IniFile("config.ini");
-            // ポータブルモード設定確認
-            var portablemode = inis.GetBool("General", "PortableMode");
-            var pubkey= inis.GetString("General", "PublicKey", "");
-            if (!string.IsNullOrEmpty(pubkey))
-            {
-                if (!File.Exists(pubkey))
+                if (!File.Exists(publicKey))
                 {
                     Console.Error.WriteLine(
                         "The specified public key cannot be found.\n" +
                         "Please check the path in config.ini under [General] PublicKey."
                     );
-                    ErrorInput();
+                    WaitInput();
                     return 1;
                 }
-                else
-                {
-                    extraJavaArgs = pubkey;
-                }
+
+                javaArgs.Add(publicKey);
             }
-            
-            // ポータブルモードの場合
-            if (portablemode)
+
+            var portableMode = ini.GetBool("General", "PortableMode");
+
+            if (portableMode)
             {
-                // ポータブルモード用鍵ディレクトリ作成
                 string portableKeyDir = Path.Combine(exeDir, "JAES-conf", "key");
 
-                // ディレクトリ作成
                 try
                 {
                     Directory.CreateDirectory(portableKeyDir);
@@ -106,28 +99,18 @@ class Program
                         portableKeyDir + "\n" +
                         ex.Message
                     );
-                    ErrorInput();
+                    WaitInput();
                     return 1;
                 }
-                // 秘密鍵パス: ポータブルモード用鍵ディレクトリ\private.pem
-                keyPath = Path.Combine(
-                    portableKeyDir, "private.pem"
-                );
 
-                // Java引数にポータブルモード用鍵ディレクトリを追加
-                extraJavaArgs = "--portable " + portableKeyDir;
-                // Console.WriteLine("Portable Key Directory: " + portableKeyDir); 
+                keyPath = Path.Combine(portableKeyDir, "private.pem");
+
+                javaArgs.Add("--portable");
+                javaArgs.Add(portableKeyDir);
             }
-            else
-            { // 秘密鍵パス: %APPDATA%\JAES\key\private.pem
-                keyPath = Path.Combine(
-                    appData, "JAES", "key", "private.pem"
-                );
-            }
-            
         }
 
-        // 秘密鍵の存在確認
+        // 秘密鍵確認
         if (!File.Exists(keyPath))
         {
             Console.Error.WriteLine(
@@ -137,7 +120,7 @@ class Program
             );
         }
 
-        // 再度JAES.jarの存在確認(最終チェック)
+        // JAES.jar 最終確認
         if (!File.Exists(jaesJar))
         {
             Console.Error.WriteLine(
@@ -145,48 +128,67 @@ class Program
                 "Please place JAES.jar in the same directory as this executable,\n" +
                 "or specify the path in config.ini under [JAES] JarPath."
             );
-            ErrorInput();
+            WaitInput();
             return 1;
         }
 
-        // Javaプロセス起動
+        // Java起動
         var psi = new ProcessStartInfo
         {
             FileName = "java",
-            Arguments ="-Xmx1g -jar \"" + jaesJar + "\" " +extraJavaArgs + " " +string.Join(" ", args),
             UseShellExecute = false
         };
-        
+
+        psi.ArgumentList.Add("-Xmx1g");
+        psi.ArgumentList.Add("-jar");
+        psi.ArgumentList.Add(jaesJar);
+
+        foreach (var arg in javaArgs)
+        {
+            psi.ArgumentList.Add(arg);
+        }
+
+        foreach (var arg in args)
+        {
+            psi.ArgumentList.Add(arg);
+        }
+
         try
         {
             var proc = Process.Start(psi);
-            proc.WaitForExit();
+
             if (proc == null)
             {
                 Console.Error.WriteLine("Failed to start Java process.");
-                ErrorInput();
+                WaitInput();
                 return 1;
             }
+
+            proc.WaitForExit();
+
+            WaitInput();
+
             return proc.ExitCode;
         }
-        catch (Win32Exception) {             
+        catch (Win32Exception)
+        {
             Console.Error.WriteLine(
                 "Java Runtime Environment (JRE) is not installed or not found in PATH.\n" +
-                "Please install Java (JDK 25 or compatible) and ensure the 'java' command is available in PATH.\n\"https://jdk.java.net/25/\""
+                "Please install Java (JDK 25 or compatible) and ensure the 'java' command is available in PATH.\n" +
+                "https://jdk.java.net/25/"
             );
-            ErrorInput();
+            WaitInput();
             return 1;
         }
     }
 
-    // エラー時の入力待ち
-    static void ErrorInput()
+    static void WaitInput()
     {
         if (!Environment.UserInteractive)
             return;
 
-        Console.Error.WriteLine();
-        Console.Error.WriteLine("Press Enter to exit...");
+        Console.WriteLine();
+        Console.WriteLine("Press Enter to exit...");
         Console.ReadLine();
     }
 }
